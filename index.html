@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arkanoid</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        position: relative;
+        font-family: Arial, sans-serif;
+      }
+      canvas {
+        background: url("background.gif") no-repeat center center/cover;
+        display: block;
+      }
+      #menu {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+      }
+      #menu h1 {
+        color: white;
+        font-size: 36px;
+        margin-bottom: 20px;
+      }
+      #menu button {
+        width: 200px;  
+        height: 50px;  
+        padding: 10px 20px;
+        font-size: 18px;
+        border: none;
+        border-radius: 5px;
+        background-color: white;
+        cursor: pointer;
+      }
+      #menu button:hover {
+        background-color: lightgray;
+      }
+      #pauseMenu {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+      }
+      #pauseMenu h1 {
+        color: white;
+        font-size: 36px;
+        margin-bottom: 20px;
+      }
+      #pauseMenu button {
+        width: 200px;  
+        height: 50px;  
+        padding: 10px 20px;
+        font-size: 18px;
+        border: none;
+        border-radius: 5px;
+        background-color: white;
+        cursor: pointer;
+      }
+      #pauseMenu button:hover {
+        background-color: lightgray;
+      }
+      #author {
+        position: absolute;
+        bottom: 20px;
+        right: 10px;
+        color: white;
+        opacity: 0.5;
+        font-size: 16px;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="menu">
+      <h1>Do you want to start the game?</h1>
+      <button id="startButton">Start</button>
+      <button id="toggleMusic">Music: On</button>
+      <button id="toggleSound">Sound: On</button>
+    </div>
+    <div id="pauseMenu">
+      <h1>PAUSE</h1>
+      <button id="resumeButton">Resume</button>
+      <button id="toggleMusicPause">Music: On</button>
+      <button id="toggleSoundPause">Sound: On</button>
+    </div>
+    <div id="author">By: Чалий Олександр ПЗПІ-22-7</div>
+
+    <script>
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const menu = document.getElementById("menu");
+      const pauseMenu = document.getElementById("pauseMenu");
+      const startButton = document.getElementById("startButton");
+      const resumeButton = document.getElementById("resumeButton");
+      const toggleMusicButton = document.getElementById("toggleMusic");
+      const toggleSoundButton = document.getElementById("toggleSound");
+      const toggleMusicPauseButton = document.getElementById("toggleMusicPause");
+      const toggleSoundPauseButton = document.getElementById("toggleSoundPause");
+
+      const bgMusic = new Audio("background-music.mp3");
+      const paddleHitSound = new Audio("paddle-hit.mp3");
+      const blockBreakSound = new Audio("block-break.mp3");
+      const boostStartSound = new Audio("boost-start.mp3");
+      const boostEndSound = new Audio("boost-end.mp3");
+
+      bgMusic.loop = true;
+      bgMusic.volume = 0.06; 
+      paddleHitSound.volume = 0.1;
+      blockBreakSound.volume = 0.07;
+      boostStartSound.volume = 0.1;
+      boostEndSound.volume = 0.1;
+
+      let soundEnabled = true;
+      let musicEnabled = true;
+      let gameRunning = false;
+      let gamePaused = false;
+      let gameFinished = false;
+
+      toggleMusicButton.addEventListener("click", () => {
+        musicEnabled = !musicEnabled;
+        toggleMusicButton.textContent = `Music: ${musicEnabled ? "On" : "Off"}`;
+        toggleMusicPauseButton.textContent = `Music: ${musicEnabled ? "On" : "Off"}`;
+        if (musicEnabled) {
+          bgMusic.play();
+        } else {
+          bgMusic.pause();
+        }
+      });
+
+      toggleMusicPauseButton.addEventListener("click", () => {
+        musicEnabled = !musicEnabled;
+        toggleMusicButton.textContent = `Music: ${musicEnabled ? "On" : "Off"}`;
+        toggleMusicPauseButton.textContent = `Music: ${musicEnabled ? "On" : "Off"}`;
+        if (musicEnabled) {
+          bgMusic.play();
+        } else {
+          bgMusic.pause();
+        }
+      });
+
+      toggleSoundButton.addEventListener("click", () => {
+        soundEnabled = !soundEnabled;
+        toggleSoundButton.textContent = `Sound: ${soundEnabled ? "On" : "Off"}`;
+        toggleSoundPauseButton.textContent = `Sound: ${soundEnabled ? "On" : "Off"}`;
+      });
+
+      toggleSoundPauseButton.addEventListener("click", () => {
+        soundEnabled = !soundEnabled;
+        toggleSoundButton.textContent = `Sound: ${soundEnabled ? "On" : "Off"}`;
+        toggleSoundPauseButton.textContent = `Sound: ${soundEnabled ? "On" : "Off"}`;
+      });
+
+      function playSound(sound) {
+        if (soundEnabled) {
+          sound.currentTime = 0;
+          sound.play();
+        }
+      }
+
+      resumeButton.addEventListener("click", resumeGame);
+
+      startButton.addEventListener("click", startOrRestartGame);
+
+      function startOrRestartGame() {
+        if (gameFinished) {
+          restartGame();
+        } else {
+          startGame();
+        }
+      }
+
+      function startGame() {
+        menu.style.display = "none"; 
+        if (musicEnabled) bgMusic.play(); 
+        gameRunning = true; 
+        resetGameVariables(); 
+        draw();
+      }
+
+      function restartGame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        menu.style.display = "none";
+
+        gameRunning = true;
+        resetGameVariables();
+        ballX = canvas.width / 2;
+        ballY = canvas.height - paddleHeight - ballRadius - 10;
+        ballSpeedX = 5;
+        ballSpeedY = -5;
+        paddleX = (canvas.width - paddleWidth) / 2;
+        
+        if (musicEnabled) bgMusic.play();
+
+        draw();
+      }
+
+      function resetGameVariables() {
+        score = 0;
+        isPaddleBoosted = false;
+        boostTimeLeft = 0;
+        boostTimeoutId = null;
+        totalBlocks = 0;
+        bricks.length = 0;
+        boosters.length = 0;
+        initializeBricks();
+      }
+
+
+      function resumeGame() {
+        if (musicEnabled) {
+          bgMusic.play();
+        } 
+        pauseMenu.style.display = "none"; 
+        gamePaused = false; 
+        draw(); 
+      }
+
+      function endGame(won) {
+        gameRunning = false; 
+        gameFinished = true;
+        bgMusic.pause(); 
+        menu.querySelector("h1").textContent = won ? "You won! Play again?" : "You lost! Try again?";
+        startButton.textContent = "Restart";
+        menu.style.display = "flex"; 
+      }
+
+      let paddleWidth = 150;
+      let paddleHeight = 20;
+      let paddleColor = "#0095DD";
+      let ballRadius = 10;
+      let paddleX;
+      let ballX, ballY;
+      let ballSpeedX = 5;
+      let ballSpeedY = -5;
+
+      const bricks = [];
+      const boosters = [];
+      const brickRowCount = 7;
+      let brickColumnCount;
+      let brickWidth, brickHeight;
+      const brickPadding = 10;
+      const brickOffsetTop = 30;
+
+      let score = 0;
+      let isPaddleBoosted = false;
+      let boostTimeLeft = 0;
+      let boostTimeoutId = null;
+      let totalBlocks = 0;
+
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        paddleX = (canvas.width - paddleWidth) / 2;
+        ballX = canvas.width / 2;
+        ballY = canvas.height - paddleHeight - ballRadius - 10;
+
+        brickColumnCount = Math.floor((canvas.width - 2 * brickPadding) / 100);
+        brickWidth = (canvas.width - (brickColumnCount + 1) * brickPadding) / brickColumnCount;
+        brickHeight = 20;
+
+        initializeBricks();
+      }
+
+      function initializeBricks() {
+        bricks.length = 0;
+        totalBlocks = 0;
+
+        for (let r = 0; r < brickRowCount; r++) {
+          const columnsInRow = brickColumnCount - r * 2;
+          const rowOffsetX = (brickColumnCount - columnsInRow) * (brickWidth + brickPadding) / 2;
+
+          bricks[r] = [];
+          for (let c = 0; c < columnsInRow; c++) {
+            const offsetX = c * (brickWidth + brickPadding) + rowOffsetX;
+            const offsetY = r * (brickHeight + brickPadding) + brickOffsetTop;
+
+            bricks[r][c] = {
+              x: offsetX,
+              y: offsetY,
+              status: 1,
+              hasBooster: Math.random() < 0.1,
+              color: `hsl(${r * 50}, 70%, 50%)`,
+            };
+
+            totalBlocks++;
+          }
+        }
+      }
+
+      document.addEventListener("mousemove", movePaddle);
+      function movePaddle(event) {
+        if (!gameRunning || gamePaused) return;
+
+        const mouseX = event.clientX;
+        paddleX = mouseX - paddleWidth / 2;
+        if (paddleX < 0) paddleX = 0;
+        if (paddleX > canvas.width - paddleWidth) paddleX = canvas.width - paddleWidth;
+      }
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          if (gameRunning && !gamePaused) {
+            gamePaused = true;
+            pauseMenu.style.display = "flex";
+            bgMusic.pause(); 
+          }
+        }
+      });
+
+      function drawBall() {
+        ctx.beginPath();
+        ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+        ctx.closePath();
+
+        ctx.globalAlpha = 0.8; 
+
+        const horizontalGradient = ctx.createLinearGradient(ballX - ballRadius, ballY - ballRadius, ballX + ballRadius, ballY - ballRadius);
+        horizontalGradient.addColorStop(0, 'rgba(0, 149, 221, 1)'); 
+        horizontalGradient.addColorStop(0.2, 'rgba(0, 149, 221, 1)'); 
+
+        const verticalGradient = ctx.createLinearGradient(ballX - ballRadius, ballY - ballRadius, ballX - ballRadius, ballY + ballRadius);
+        verticalGradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); 
+        verticalGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)'); 
+
+        ctx.fillStyle = horizontalGradient;
+        ctx.fill();
+
+        ctx.globalAlpha = 0.7;
+
+        ctx.fillStyle = verticalGradient;
+        ctx.fill();
+
+        ctx.globalAlpha = 1.0;
+      }
+
+      function drawPaddle() {
+        const cornerRadius = 10; 
+        ctx.beginPath();
+        ctx.moveTo(paddleX + cornerRadius, canvas.height - paddleHeight);
+        ctx.lineTo(paddleX + paddleWidth - cornerRadius, canvas.height - paddleHeight); 
+        ctx.arcTo(paddleX + paddleWidth, canvas.height - paddleHeight, paddleX + paddleWidth, canvas.height - paddleHeight + cornerRadius, cornerRadius); 
+        ctx.lineTo(paddleX + paddleWidth, canvas.height - paddleHeight + paddleHeight - cornerRadius); 
+        ctx.arcTo(paddleX + paddleWidth, canvas.height - paddleHeight + paddleHeight, paddleX + paddleWidth - cornerRadius, canvas.height - paddleHeight + paddleHeight, cornerRadius); 
+        ctx.lineTo(paddleX + cornerRadius, canvas.height - paddleHeight + paddleHeight);
+        ctx.arcTo(paddleX, canvas.height - paddleHeight + paddleHeight, paddleX, canvas.height - paddleHeight + paddleHeight - cornerRadius, cornerRadius); 
+        ctx.lineTo(paddleX, canvas.height - paddleHeight + cornerRadius); 
+        ctx.arcTo(paddleX, canvas.height - paddleHeight, paddleX + cornerRadius, canvas.height - paddleHeight, cornerRadius); 
+        ctx.closePath();
+
+        ctx.globalAlpha = 0.8; 
+
+        const horizontalGradient = ctx.createLinearGradient(paddleX, canvas.height - paddleHeight, paddleX + paddleWidth, canvas.height - paddleHeight);
+        horizontalGradient.addColorStop(0, 'rgba(0, 149, 221, 0.5)'); 
+        horizontalGradient.addColorStop(0.5, 'rgba(0, 149, 221, 1)');
+
+        const verticalGradient = ctx.createLinearGradient(paddleX, canvas.height - paddleHeight, paddleX, canvas.height - paddleHeight + paddleHeight);
+        verticalGradient.addColorStop(0, 'rgba(255, 255, 255, 0.7)'); 
+        verticalGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)'); 
+
+        ctx.fillStyle = horizontalGradient;
+        ctx.fill();
+
+        ctx.globalAlpha = 0.7;
+
+        ctx.fillStyle = verticalGradient;
+        ctx.fill();
+
+        ctx.globalAlpha = 1.0;
+      }
+
+      let time = 0; 
+
+      function drawBricks() {
+        const cornerRadius = 5; 
+        for (let r = 0; r < bricks.length; r++) {
+          for (let c = 0; c < bricks[r].length; c++) {
+            const brick = bricks[r][c];
+            if (brick.status === 1) {
+              ctx.beginPath();
+              ctx.moveTo(brick.x + cornerRadius, brick.y); 
+              ctx.lineTo(brick.x + brickWidth - cornerRadius, brick.y); 
+              ctx.arcTo(brick.x + brickWidth, brick.y, brick.x + brickWidth, brick.y + cornerRadius, cornerRadius); 
+              ctx.lineTo(brick.x + brickWidth, brick.y + brickHeight - cornerRadius); 
+              ctx.arcTo(brick.x + brickWidth, brick.y + brickHeight, brick.x + brickWidth - cornerRadius, brick.y + brickHeight, cornerRadius);
+              ctx.lineTo(brick.x + cornerRadius, brick.y + brickHeight); 
+              ctx.arcTo(brick.x, brick.y + brickHeight, brick.x, brick.y + brickHeight - cornerRadius, cornerRadius); 
+              ctx.lineTo(brick.x, brick.y + cornerRadius); 
+              ctx.arcTo(brick.x, brick.y, brick.x + cornerRadius, brick.y, cornerRadius); 
+              ctx.closePath();
+
+              ctx.globalAlpha = 0.7; 
+
+              if (brick.hasBooster) {
+                const gradient = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brickHeight);
+
+                const timeFactor = Math.sin(time * 0.1); 
+
+                const blueToPurpleStart = `rgb(${100 + r * 10 + timeFactor * 50}, ${100 + r * 10 + timeFactor * 50}, 255)`; 
+                const blueToPurpleEnd = `rgb(${100 + r * 10 + timeFactor * 50}, ${0 + r * 20 + timeFactor * 50}, 150)`; 
+
+                gradient.addColorStop(0, blueToPurpleStart); 
+                gradient.addColorStop(1, blueToPurpleEnd);  
+
+                ctx.fillStyle = gradient;
+                ctx.fill();  
+              } else {
+                const defaultGradient = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brickHeight);
+                defaultGradient.addColorStop(0, 'rgb(100, 100, 255)');
+                defaultGradient.addColorStop(1, 'rgb(100, 0, 150)'); 
+
+                ctx.fillStyle = defaultGradient;
+                ctx.fill(); 
+              }
+
+              const shineGradient = ctx.createLinearGradient(brick.x, brick.y, brick.x + brickWidth, brick.y);
+              shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)'); 
+              shineGradient.addColorStop(1, 'rgba(255, 105, 180, 0.5)'); 
+
+              ctx.fillStyle = shineGradient;
+              ctx.fill(); 
+
+              ctx.globalAlpha = 1.0;
+            }
+          }
+        }
+
+        time++;
+      }
+
+      function createBooster(brick) {
+        if (!boosters.find(b => b.x === brick.x && b.y === brick.y)) {
+          boosters.push({
+            x: brick.x + brickWidth / 2,
+            y: brick.y + brickHeight,
+            speedY: 2,
+            radius: 7,
+          });
+        }
+      }
+
+
+      function drawBoosters() {
+        boosters.forEach((booster, index) => {
+          ctx.beginPath();
+          ctx.arc(booster.x, booster.y, booster.radius, 0, Math.PI * 2);
+
+          const time = Date.now();
+          
+          const gradient = ctx.createLinearGradient(booster.x - booster.radius, booster.y - booster.radius, booster.x + booster.radius, booster.y + booster.radius);
+
+          const timeFactor = Math.sin(time * 0.02); 
+
+          const startColor = `rgb(${100 + timeFactor * 100}, ${100 + timeFactor * 100}, 200)`; 
+          const endColor = `rgb(${100 + timeFactor * 100}, ${0 + timeFactor * 100}, 150)`; 
+
+          gradient.addColorStop(0, startColor);
+          gradient.addColorStop(1, endColor); 
+
+          ctx.fillStyle = gradient;
+          ctx.fill();
+          ctx.closePath();
+
+          booster.y += booster.speedY;
+
+          if (booster.y + booster.radius > canvas.height - paddleHeight) {
+            if (booster.x > paddleX && booster.x < paddleX + paddleWidth) {
+              collectBooster();
+            } else if (booster.y > canvas.height) {
+              boosters.splice(index, 1); 
+            }
+          }
+        });
+      }
+
+      let boostTimer = 0;  
+      let boostInterval = null; 
+      let originalPaddleWidth = paddleWidth; 
+      
+      function drawBoostTimer() {
+        if (boostTimer > 0) {
+          ctx.font = "20px Arial";
+          ctx.fillStyle = "white";
+          ctx.fillText("Boost Time Left: " + Math.ceil(boostTimer) + "s", 10, canvas.height - 30);
+        }
+      }
+
+      function activateBooster() {
+        paddleWidth = 250; 
+        boostTimer = 10;
+        if (boostInterval) clearInterval(boostInterval); 
+        boostInterval = setInterval(updateBoostTimer, 1000); 
+        playSound(boostStartSound); 
+      }
+
+      function updateBoostTimer() {
+        if (!gamePaused){
+          boostTimer--;
+        }
+        if (boostTimer <= 0) {
+          paddleWidth = originalPaddleWidth; 
+          clearInterval(boostInterval); 
+          playSound(boostEndSound); 
+        }
+      }
+
+      function collectBooster(booster) {
+        boosters.splice(boosters.indexOf(booster), 1);
+        activateBooster();
+      }
+
+      function draw() {
+        if (!gameRunning || gamePaused) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        drawBall();
+        drawPaddle();
+        drawBricks();
+        drawBoosters();
+        drawBoostTimer();
+
+        ballX += ballSpeedX;
+        ballY += ballSpeedY;
+
+        if (ballX + ballRadius > canvas.width || ballX - ballRadius < 0) ballSpeedX = -ballSpeedX;
+        if (ballY - ballRadius < 0) ballSpeedY = -ballSpeedY;
+
+        if (
+          ballY + ballRadius > canvas.height - paddleHeight &&
+          ballX > paddleX &&
+          ballX < paddleX + paddleWidth
+        ) {
+          let relativeX = ballX - (paddleX + paddleWidth / 2);
+          let angle = (relativeX / (paddleWidth / 2)) * Math.PI / 4;
+          ballSpeedX = 5 * Math.sin(angle);
+          ballSpeedY = -5 * Math.cos(angle);
+
+          playSound(paddleHitSound);
+        } else if (ballY + ballRadius > canvas.height) {
+          endGame(false);
+          return;
+        }
+
+        checkCollisions();
+        if (totalBlocks === 0) {
+          endGame(true);
+          return;
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      function checkCollisions() {
+        for (let r = 0; r < bricks.length; r++) {
+          for (let c = 0; c < bricks[r].length; c++) {
+            const brick = bricks[r][c];
+            if (brick.status === 1) {
+              if (
+                ballX + ballRadius > brick.x &&
+                ballX - ballRadius < brick.x + brickWidth &&
+                ballY + ballRadius > brick.y &&
+                ballY - ballRadius < brick.y + brickHeight
+              ) {
+                ballSpeedY = -ballSpeedY;
+                brick.status = 0;
+                score++;
+                totalBlocks--;
+                playSound(blockBreakSound);
+                if (brick.hasBooster) {
+                  createBooster(brick);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+    </script>
+  </body>
+</html>
